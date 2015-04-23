@@ -1,0 +1,336 @@
+package com.hps.tweetmap;
+
+import java.util.ArrayList;
+import java.util.Collections;
+
+import twitter4j.FilterQuery;
+import twitter4j.Location;
+import twitter4j.ResponseList;
+import twitter4j.StatusListener;
+import twitter4j.Trends;
+import twitter4j.Twitter;
+import twitter4j.TwitterException;
+import twitter4j.TwitterFactory;
+import twitter4j.TwitterStream;
+import twitter4j.TwitterStreamFactory;
+import twitter4j.conf.Configuration;
+import twitter4j.conf.ConfigurationBuilder;
+
+/**
+ * 
+ */
+
+/**
+ * @author hps
+ * 
+ */
+public class TweetGetHelper {
+
+	private ConfigurationBuilder cb;
+
+	private Configuration conf;
+
+	private Twitter twitter;
+
+	private ResponseList<Location> locations;
+	private Trends trends;
+	private ArrayList<String> tList;
+	private Integer woeids[];
+	private TwitterStream twitterStream;
+	private StatusListener listener;
+
+	private ArrayList<Integer> woeidMatched;
+
+	private String keyWords[];
+
+	private boolean matchRestart = true;
+
+	public TweetGetHelper() throws TwitterException {
+		cb = new ConfigurationBuilder();
+
+		cb.setDebugEnabled(true)
+				.setOAuthConsumerKey("d6ojgJdrVFJIJ21gFglfXrPZi")
+				.setOAuthConsumerSecret(
+						"sYfqv0G255lpRr9dF6SFLuW5oSMYB1e8pgj8uCVYvS0GMAf2Gl")
+				.setOAuthAccessToken(
+						"26041939-lckTCNpJbaOAhqi4yHrIQQYwD5RfZzLawM0l2iJYH")
+				.setOAuthAccessTokenSecret(
+						"iYABJyfmlBBTGIUfS2t4IX2Y7CTSnDZF7yQ2fqQMKnqNV");
+		/*
+		 * cb.setDebugEnabled(true)
+		 * .setOAuthConsumerKey("D20WXX0diNL5N6GUAI3RrLm4w")
+		 * .setOAuthConsumerSecret(
+		 * "iR55JGFCdKVIvixo0S0ADfLHWfeSKBb5rwLZmGbyWXKfZcrL1Q")
+		 * .setOAuthAccessToken(
+		 * "331143255-SqWrzVyepRXnJtJRKuAVGkg4sBpP8ozpscLqNye0")
+		 * .setOAuthAccessTokenSecret(
+		 * "j6wSSHRjjmd2CwuKkqD6lPpYBmauHd5m7C5NBGDkP8MQ7");
+		 */
+
+		conf = cb.build();
+
+		twitter = new TwitterFactory(conf).getInstance();
+		twitterStream = new TwitterStreamFactory(conf).getInstance();
+
+		woeidMatched = new ArrayList<>();
+		tList = new ArrayList<String>();
+
+		// resetTrends();
+
+	}
+
+	public void resetTrends() throws TwitterException {
+		locations = twitter.getAvailableTrends();
+
+		boolean allComplete = true;
+
+		for (Location location : locations) {
+			// System.out.println(location.getName() + " (woeid:"
+			// + location.getWoeid() + ")");
+			int woeid = location.getWoeid();
+
+			if (woeidMatched.contains(woeid) && !matchRestart) {
+				System.out.println("===>Skipping Trending Topics for: "
+						+ location.getName() + "<===");
+				continue;
+			} else {
+				matchRestart = false;
+				allComplete = false;
+
+				System.out.println("===>Finding Trending Topics for: "
+						+ location.getName() + "<===");
+
+				try {
+					trends = twitter.getPlaceTrends(woeid);
+				} catch (TwitterException te) {
+					System.out.println("===>Rate Limit Exceeded<===");
+					allComplete = false;
+					break;
+				}
+
+				woeidMatched.add(woeid);
+
+				for (int j = 0; j < trends.getTrends().length; j++) {
+					tList.add(trends.getTrends()[j].getName());
+				}
+			}
+
+		}
+
+		/*
+		 * //Integer listWoeid[] = {1, 23424868, 23424942, 23424938, 23424936,
+		 * 23424900, 23424856, 23424853, 23424848, 23424829, 23424975, 23424819,
+		 * 23424775, 23424768, 23424748};
+		 * 
+		 * //woeids = new Integer[locations.size()]; Integer listWoeid[] = {1,
+		 * 23424868}; woeids = listWoeid;
+		 * 
+		 * for(int i=0; i<woeids.length; i++) {
+		 * 
+		 * //System.out.println(location.getName() + " (woeid:" // +
+		 * location.getWoeid() + ")"); int woeid = woeids[i];
+		 * 
+		 * if ( woeidMatched.contains(woeid) && !matchRestart ) {
+		 * System.out.println("===>Skipping Trending Topics for: " + woeid +
+		 * "<==="); continue; } else {
+		 * System.out.println("===>Finding Trending Topics for: " + woeid +
+		 * "<===");
+		 * 
+		 * try { trends = twitter.getPlaceTrends(woeid); } catch
+		 * (TwitterException te) {
+		 * System.out.println("===>Rate Limit Exceeded<==="); allComplete =
+		 * false; matchRestart = false; break; }
+		 * 
+		 * woeidMatched.add(woeid);
+		 * 
+		 * db.deleteTrendingTopics(woeid); db.insertTrendingTopics(woeid,
+		 * trends);
+		 * 
+		 * for (int j = 0; j < trends.getTrends().length; j++) {
+		 * tList.add(trends.getTrends()[j].getName()); } }
+		 * 
+		 * }
+		 */
+		if (allComplete) {
+			System.out.println("===>All woeid complete<===");
+			allComplete = false;
+			matchRestart = true;
+			woeidMatched.clear();
+		}
+
+		/**
+		 * Track Limit:
+		 * http://stackoverflow.com/questions/8308011/streaming-api-
+		 * number-of-terms-limit
+		 */
+		if (tList.size() != 0) {
+			int numKeyWords = tList.size();
+			if (numKeyWords > 100) {
+				Collections.shuffle(tList);
+				System.out
+						.println("===>Tracked keywords limit reached, shuffling<===");
+				numKeyWords = 100;
+			}
+
+			keyWords = new String[tList.size()];
+
+			for (int i = 0; i < numKeyWords; i++) {
+				keyWords[i] = tList.get(i).toString();
+				System.out.println("keyword[" + i + "] = " + keyWords[i]);
+			}
+
+			twitterStream.shutdown();
+			System.out.println("===>Tweet Stream Shutdown<===");
+			twitterStream.addListener(listener);
+
+			twitterStream.filter(new FilterQuery().track(keyWords));
+			System.out.println("===>Tweet Stream Started<===");
+
+		} else {
+			System.out.println("===>No change<===");
+		}
+
+	}
+
+	/**
+	 * @return the cb
+	 */
+	public ConfigurationBuilder getCb() {
+		return cb;
+	}
+
+	/**
+	 * @param cb
+	 *            the cb to set
+	 */
+	public void setCb(ConfigurationBuilder cb) {
+		this.cb = cb;
+	}
+
+	/**
+	 * @return the conf
+	 */
+	public Configuration getConf() {
+		return conf;
+	}
+
+	/**
+	 * @param conf
+	 *            the conf to set
+	 */
+	public void setConf(Configuration conf) {
+		this.conf = conf;
+	}
+
+	/**
+	 * @return the twitter
+	 */
+	public Twitter getTwitter() {
+		return twitter;
+	}
+
+	/**
+	 * @param twitter
+	 *            the twitter to set
+	 */
+	public void setTwitter(Twitter twitter) {
+		this.twitter = twitter;
+	}
+
+	/**
+	 * @return the locations
+	 */
+	public ResponseList<Location> getLocations() {
+		return locations;
+	}
+
+	/**
+	 * @param locations
+	 *            the locations to set
+	 */
+	public void setLocations(ResponseList<Location> locations) {
+		this.locations = locations;
+	}
+
+	/**
+	 * @return the trends
+	 */
+	public Trends getTrends() {
+		return trends;
+	}
+
+	/**
+	 * @param trends
+	 *            the trends to set
+	 */
+	public void setTrends(Trends trends) {
+		this.trends = trends;
+	}
+
+	/**
+	 * @return the tList
+	 */
+	public ArrayList<String> gettList() {
+		return tList;
+	}
+
+	/**
+	 * @param tList
+	 *            the tList to set
+	 */
+	public void settList(ArrayList<String> tList) {
+		this.tList = tList;
+	}
+
+	/**
+	 * @return the woeids
+	 */
+	public Integer[] getWoeids() {
+		return woeids;
+	}
+
+	/**
+	 * @param woeids
+	 *            the woeids to set
+	 */
+	public void setWoeids(Integer[] woeids) {
+		this.woeids = woeids;
+	}
+
+	/**
+	 * @return the twitterStream
+	 */
+	public TwitterStream getTwitterStream() {
+		return twitterStream;
+	}
+
+	/**
+	 * @param twitterStream
+	 *            the twitterStream to set
+	 */
+	public void setTwitterStream(TwitterStream twitterStream) {
+		this.twitterStream = twitterStream;
+	}
+
+	/**
+	 * @return the listener
+	 */
+	public StatusListener getListener() {
+		return listener;
+	}
+
+	/**
+	 * @param listener
+	 *            the listener to set
+	 */
+	public void setListener(StatusListener listener) {
+		twitterStream.removeListener(this.listener);
+		this.listener = listener;
+		twitterStream.addListener(this.listener);
+	}
+
+	public void startSample() {
+		twitterStream.sample();
+	}
+
+}
