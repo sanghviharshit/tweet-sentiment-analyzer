@@ -28,6 +28,7 @@ public class SentimentAnalysis {
 	public SentimentAnalysis() {
 		// Create an AlchemyAPI object.
 		try {
+			//alchemyObj = AlchemyAPI.GetInstanceFromString("");
 			alchemyObj = AlchemyAPI.GetInstanceFromFile("api_key.txt");
 		} catch (IOException e) {
 			e.printStackTrace();
